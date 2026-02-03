@@ -1,5 +1,6 @@
+#[derive(Clone, Copy)]
 enum Token {
-    Atom(char),
+    Operand(char),
     Operator(char),
     Eof,
 }
@@ -14,11 +15,20 @@ impl Lexer {
             .chars()
             .filter(|item| !item.is_ascii_whitespace())
             .map(|c| match c {
-                '0'..'9' | 'a'..='z' | 'A'..='Z' => Token::Atom(c),
+                '0'..'9' | 'a'..='z' | 'A'..='Z' => Token::Operand(c),
                 _ => Token::Operator(c),
             })
             .collect::<Vec<_>>();
+        tokens.reverse();
         Lexer { tokens }
+    }
+
+    fn next(&mut self) -> Token {
+        self.tokens.pop().unwrap_or(Token::Eof)
+    }
+
+    fn peek(&mut self) -> Token {
+        self.tokens.last().copied().unwrap_or(Token::Eof)
     }
 }
 
@@ -27,7 +37,7 @@ fn parse_expression(lexer: &Lexer) -> Expression {
 }
 
 enum Expression {
-    Atom(char),
+    Operand(char),
     Operation(char, Vec<Expression>),
 }
 
