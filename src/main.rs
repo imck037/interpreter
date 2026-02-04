@@ -4,23 +4,22 @@ use std::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Token {
-    Operand(char),
-    Operator(char),
+enum Token<'a> {
+    Operand(&'a str),
+    Operator(&'a str),
     Eof,
 }
 
-struct Lexer {
-    tokens: Vec<Token>,
+struct Lexer<'a> {
+    tokens: Vec<Token<'a>>,
 }
 
-impl Lexer {
+impl Lexer<'a> {
     fn new(input: &str) -> Lexer {
         let mut tokens = input
-            .chars()
-            .filter(|item| !item.is_ascii_whitespace())
+            .split_whitespace()
             .map(|c| match c {
-                '0'..'9' | 'a'..='z' | 'A'..='Z' => Token::Operand(c),
+                r"[a-zA-Z]+" | r"[0-9]+\.?[0-9]?" => Token::Operand(c),
                 _ => Token::Operator(c),
             })
             .collect::<Vec<_>>();
@@ -37,12 +36,12 @@ impl Lexer {
     }
 }
 
-fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Expression {
+fn parse_expression<'a>(lexer: &'a mut Lexer, min_bp: f32) -> Expression<'a> {
     let mut lhs = match lexer.next() {
         Token::Operand(it) => Expression::Operand(it),
-        Token::Operator('(') => {
+        Token::Operator("(") => {
             let lhs = parse_expression(lexer, 0.0);
-            assert_eq!(lexer.next(), Token::Operator(')'));
+            assert_eq!(lexer.next(), Token::Operator(")"));
             lhs
         }
         t => panic!("bad token: {:?}", t),
@@ -50,7 +49,7 @@ fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Expression {
     loop {
         let op = match lexer.peek() {
             Token::Eof => break,
-            Token::Operator(')') => break,
+            Token::Operator(")") => break,
             Token::Operator(op) => op,
             t => panic!("bad token: {:?}", t),
         };
@@ -77,13 +76,13 @@ fn infix_binding_power(op: char) -> (f32, f32) {
     }
 }
 
-enum Expression {
-    Operand(char),
-    Operation(char, Vec<Expression>),
+enum Expression<'a> {
+    Operand(&'a str),
+    Operation(&'a str),
 }
 
-impl Expression {
-    fn from_input(input: &str) -> Expression {
+impl Expression<'static> {
+    fn from_input(input: &'static str) -> Expression {
         let mut lexer = Lexer::new(input);
         parse_expression(&mut lexer, 0.0)
     }
