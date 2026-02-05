@@ -14,7 +14,7 @@ struct Lexer<'a> {
     tokens: Vec<Token<'a>>,
 }
 
-impl Lexer<'a> {
+impl<'a> Lexer<'a> {
     fn new(input: &str) -> Lexer {
         let mut tokens = input
             .split_whitespace()
@@ -65,41 +65,35 @@ fn parse_expression<'a>(lexer: &'a mut Lexer, min_bp: f32) -> Expression<'a> {
     lhs
 }
 
-fn infix_binding_power(op: char) -> (f32, f32) {
+fn infix_binding_power(op: &str) -> (f32, f32) {
     match op {
-        '=' => (0.2, 0.1),
-        '+' | '-' => (1.0, 1.1),
-        '*' | '/' => (2.0, 2.1),
-        '^' | '√' => (3.1, 3.0),
-        '.' => (4.0, 4.1),
+        "=" => (0.2, 0.1),
+        "+" | "-" => (1.0, 1.1),
+        "*" | "/" => (2.0, 2.1),
+        "^" | "√" => (3.1, 3.0),
+        "." => (4.0, 4.1),
         _ => panic!("bad op: {:?}", op),
     }
 }
 
 enum Expression<'a> {
     Operand(&'a str),
-    Operation(&'a str),
+    Operation(&'a str, Vec<Expression>),
 }
 
-impl Expression<'static> {
-    fn from_input(input: &'static str) -> Expression {
+impl<'a> Expression<'a> {
+    fn from_input(input: &'a str) -> Expression<'a> {
         let mut lexer = Lexer::new(input);
         parse_expression(&mut lexer, 0.0)
     }
     #[allow(unused)]
-    fn is_asign(&self) -> Option<(char, &Expression)> {
+    fn is_asign(&self) -> Option<(&str, &Expression)> {
         match self {
             Expression::Operand(_) => return None,
             Expression::Operation(c, operands) => {
-                if *c == '=' {
+                if *c == "=" {
                     let var_name = match operands.first().unwrap() {
-                        Expression::Operand(c) => {
-                            if *c >= 'a' && *c <= 'z' || *c >= 'A' && *c <= 'Z' {
-                                *c
-                            } else {
-                                panic!("Not a variable name: {}", c)
-                            }
-                        }
+                        Expression::Operand(c) => c,
                         _ => unreachable!(),
                     };
                     return Some((var_name, operands.last().unwrap()));
@@ -109,25 +103,26 @@ impl Expression<'static> {
         }
     }
     #[allow(unused)]
-    fn eval(&self, variables: &HashMap<char, f32>) -> f32 {
+    fn eval(&self, variables: &HashMap<&str, f32>) -> f32 {
         match self {
-            Expression::Operand(c) => match c {
-                '0'..='9' => return c.to_digit(10).unwrap() as f32,
-                'a'..='z' | 'A'..='Z' => *variables
-                    .get(c)
-                    .expect(&format!("Undefined variable {}", c)),
+            Expression::Operand(c) => match *c {
+                r"[0-9]+\.?[0-9]?" => {
+                    let num: f32 = c.parse().unwrap();
+                    return num;
+                }
+                r"[a-zA-Z]+" => variables.get_key_value().unwrap(),
                 _ => unreachable!(),
             },
             Expression::Operation(operator, operands) => {
                 let lhs = operands.first().unwrap().eval(variables);
                 let rhs = operands.last().unwrap().eval(variables);
                 match operator {
-                    '+' => return lhs + rhs,
-                    '-' => return lhs - rhs,
-                    '*' => return lhs * rhs,
-                    '/' => return lhs / rhs,
-                    '^' => return lhs.powf(rhs),
-                    '√' => return lhs.powf(1.0 / (rhs)),
+                    &"+" => return lhs + rhs,
+                    &"-" => return lhs - rhs,
+                    &"*" => return lhs * rhs,
+                    &"/" => return lhs / rhs,
+                    &"^" => return lhs.powf(rhs),
+                    &"√" => return lhs.powf(1.0 / (rhs)),
                     op => panic!("Bad operator: {}", op),
                 }
             }
@@ -136,7 +131,7 @@ impl Expression<'static> {
 }
 
 fn main() {
-    let mut variables: HashMap<char, f32> = HashMap::new();
+    let mut variables: HashMap<&str, f32> = HashMap::new();
     loop {
         print!(">> ");
         io::stdout().flush().unwrap();
