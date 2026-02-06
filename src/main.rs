@@ -82,8 +82,8 @@ enum Expression<'a> {
 }
 
 impl<'a> Expression<'a> {
-    fn from_input(input: &'a str) -> Expression<'a> {
-        let mut lexer = Lexer::new(input);
+    fn from_input(input: String) -> Expression {
+        let mut lexer = Lexer::new(&input);
         parse_expression(&mut lexer, 0.0)
     }
     #[allow(unused)]
@@ -108,9 +108,9 @@ impl<'a> Expression<'a> {
             Expression::Operand(c) => match *c {
                 r"[0-9]+\.?[0-9]?" => {
                     let num: f32 = c.parse().unwrap();
-                    return num;
+                    num
                 }
-                r"[a-zA-Z]+" => variables.get_key_value().unwrap(),
+                r"[a-zA-Z]+" => *variables.get(c).unwrap(),
                 _ => unreachable!(),
             },
             Expression::Operation(operator, operands) => {
@@ -143,7 +143,7 @@ fn main() {
         if input.trim() == "exit" {
             break;
         }
-        let expr = Expression::from_input(&input);
+        let expr = Expression::from_input(input);
         if let Some((var_name, lhs)) = expr.is_asign() {
             let value = lhs.eval(&variables);
             variables.insert(var_name, value);
