@@ -14,29 +14,35 @@ struct Lexer<'a> {
     tokens: Vec<Token<'a>>,
 }
 
+#[allow(unused)]
 impl<'a> Lexer<'a> {
-    fn new(input: &str) -> Lexer {
+    fn new(input: &'a str) -> Lexer<'a> {
         let mut tokens = input
             .split_whitespace()
-            .map(|c| match c {
-                r"[a-zA-Z]+" | r"[0-9]+\.?[0-9]?" => Token::Operand(c),
-                _ => Token::Operator(c),
+            .map(|c| {
+                if c.chars().all(|ch| ch.is_ascii_digit() || ch == '.')
+                    || c.chars().all(|ch| ch.is_ascii_alphabetic())
+                {
+                    Token::Operand(c)
+                } else {
+                    Token::Operator(c)
+                }
             })
             .collect::<Vec<_>>();
         tokens.reverse();
         Lexer { tokens }
     }
 
-    fn next(&mut self) -> Token {
+    fn next(&mut self) -> Token<'a> {
         self.tokens.pop().unwrap_or(Token::Eof)
     }
 
-    fn peek(&mut self) -> Token {
+    fn peek(&self) -> Token<'a> {
         self.tokens.last().copied().unwrap_or(Token::Eof)
     }
 }
 
-fn parse_expression<'a>(lexer: &'a mut Lexer, min_bp: f32) -> Expression<'a> {
+fn parse_expression<'a>(lexer: &mut Lexer<'a>, min_bp: f32) -> Expression<'a> {
     let mut lhs = match lexer.next() {
         Token::Operand(it) => Expression::Operand(it),
         Token::Operator("(") => {
@@ -65,29 +71,30 @@ fn parse_expression<'a>(lexer: &'a mut Lexer, min_bp: f32) -> Expression<'a> {
     lhs
 }
 
-fn infix_binding_power(op: &str) -> (f32, f32) {
-    match op {
+fn infix_binding_power(operator: &str) -> (f32, f32) {
+    match operator {
         "=" => (0.2, 0.1),
         "+" | "-" => (1.0, 1.1),
         "*" | "/" => (2.0, 2.1),
         "^" | "√" => (3.1, 3.0),
         "." => (4.0, 4.1),
-        _ => panic!("bad op: {:?}", op),
+        _ => panic!("bad operator: {:?}", operator),
     }
 }
 
+#[derive(Debug)]
 enum Expression<'a> {
     Operand(&'a str),
-    Operation(&'a str, Vec<Expression>),
+    Operation(&'a str, Vec<Expression<'a>>),
 }
 
 impl<'a> Expression<'a> {
-    fn from_input(input: String) -> Expression {
+    fn from_input(input: &'a str) -> Expression<'a> {
         let mut lexer = Lexer::new(&input);
         parse_expression(&mut lexer, 0.0)
     }
     #[allow(unused)]
-    fn is_asign(&self) -> Option<(&str, &Expression)> {
+    fn is_asign(&self) -> Option<(&'a str, &Expression<'a>)> {
         match self {
             Expression::Operand(_) => return None,
             Expression::Operation(c, operands) => {
@@ -103,26 +110,25 @@ impl<'a> Expression<'a> {
         }
     }
     #[allow(unused)]
-    fn eval(&self, variables: &HashMap<&str, f32>) -> f32 {
+    fn eval(&self, variables: &HashMap<String, f32>) -> f32 {
         match self {
-            Expression::Operand(c) => match *c {
-                r"[0-9]+\.?[0-9]?" => {
-                    let num: f32 = c.parse().unwrap();
+            Expression::Operand(c) => {
+                if let Ok(num) = c.parse::<f32>() {
                     num
+                } else {
+                    *variables.get(*c).unwrap()
                 }
-                r"[a-zA-Z]+" => *variables.get(c).unwrap(),
-                _ => unreachable!(),
-            },
+            }
             Expression::Operation(operator, operands) => {
                 let lhs = operands.first().unwrap().eval(variables);
                 let rhs = operands.last().unwrap().eval(variables);
-                match operator {
-                    &"+" => return lhs + rhs,
-                    &"-" => return lhs - rhs,
-                    &"*" => return lhs * rhs,
-                    &"/" => return lhs / rhs,
-                    &"^" => return lhs.powf(rhs),
-                    &"√" => return lhs.powf(1.0 / (rhs)),
+                match *operator {
+                    "+" => return lhs + rhs,
+                    "-" => return lhs - rhs,
+                    "*" => return lhs * rhs,
+                    "/" => return lhs / rhs,
+                    "^" => return lhs.powf(rhs),
+                    "√" => return lhs.powf(1.0 / (rhs)),
                     op => panic!("Bad operator: {}", op),
                 }
             }
@@ -130,23 +136,23 @@ impl<'a> Expression<'a> {
     }
 }
 
+#[allow(unused)]
 fn main() {
-    let mut variables: HashMap<&str, f32> = HashMap::new();
+    let mut variables: HashMap<String, f32> = HashMap::new();
     loop {
         print!(">> ");
         io::stdout().flush().unwrap();
-        let input = {
-            let mut buf = String::new();
-            std::io::stdin().read_line(&mut buf).unwrap();
-            buf
-        };
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).unwrap();
+
         if input.trim() == "exit" {
             break;
         }
-        let expr = Expression::from_input(input);
+
+        let expr = Expression::from_input(input.trim());
         if let Some((var_name, lhs)) = expr.is_asign() {
             let value = lhs.eval(&variables);
-            variables.insert(var_name, value);
+            variables.insert(var_name.to_string(), value);
             continue;
         }
         let value = expr.eval(&variables);
