@@ -50,10 +50,12 @@ impl<'a> Lexer<'a> {
             self.pos += m.end();
             return Token::Identifier(&input[..self.pos]);
         }
+
         if let Some(m) = number.find(input) {
             self.pos += m.end();
             return Token::Number(&input[..self.pos]);
         }
+
         let ch = input.chars().next().unwrap();
         self.pos += ch.len_utf8();
 
@@ -71,104 +73,111 @@ impl<'a> Lexer<'a> {
     }
 }
 
-// fn parse_expression<'a>(lexer: &mut Lexer<'a>, min_bp: f32) -> Expression<'a> {
-//     let mut lhs = match lexer.next() {
-//         Token::Operand(it) => Expression::Operand(it),
-//         Token::Operator("(") => {
-//             let lhs = parse_expression(lexer, 0.0);
-//             assert_eq!(lexer.next(), Token::Operator(")"));
-//             lhs
-//         }
-//         t => panic!("bad token: {:?}", t),
-//     };
-//     loop {
-//         let op = match lexer.peek() {
-//             Token::Eof => break,
-//             Token::Operator(")") => break,
-//             Token::Operator(op) => op,
-//             t => panic!("bad token: {:?}", t),
-//         };
-//
-//         let (l_bp, r_bp) = infix_binding_power(op);
-//         if l_bp < min_bp {
-//             break;
-//         }
-//         lexer.next();
-//         let rhs = parse_expression(lexer, r_bp);
-//         lhs = Expression::Operation(op, vec![lhs, rhs]);
-//     }
-//     lhs
-// }
-//
-// fn infix_binding_power(operator: &str) -> (f32, f32) {
-//     match operator {
-//         "=" => (0.2, 0.1),
-//         "+" | "-" => (1.0, 1.1),
-//         "*" | "/" => (2.0, 2.1),
-//         "^" | "√" => (3.1, 3.0),
-//         "." => (4.0, 4.1),
-//         _ => panic!("bad operator: {:?}", operator),
-//     }
-// }
-//
-// #[derive(Debug)]
-// enum Expression<'a> {
-//     Operand(&'a str),
-//     Operation(&'a str, Vec<Expression<'a>>),
-// }
-//
-// impl<'a> Expression<'a> {
-//     fn from_input(input: &'a str) -> Expression<'a> {
-//         let mut lexer = Lexer::new(&input);
-//         parse_expression(&mut lexer, 0.0)
-//     }
-//     #[allow(unused)]
-//     fn is_asign(&self) -> Option<(&'a str, &Expression<'a>)> {
-//         match self {
-//             Expression::Operand(_) => return None,
-//             Expression::Operation(c, operands) => {
-//                 if *c == "=" {
-//                     let var_name = match operands.first().unwrap() {
-//                         Expression::Operand(c) => c,
-//                         _ => unreachable!(),
-//                     };
-//                     return Some((var_name, operands.last().unwrap()));
-//                 }
-//                 return None;
-//             }
-//         }
-//     }
-//     #[allow(unused)]
-//     fn eval(&self, variables: &HashMap<String, f32>) -> f32 {
-//         match self {
-//             Expression::Operand(c) => {
-//                 if let Ok(num) = c.parse::<f32>() {
-//                     num
-//                 } else {
-//                     *variables.get(*c).unwrap()
-//                 }
-//             }
-//             Expression::Operation(operator, operands) => {
-//                 let lhs = operands.first().unwrap().eval(variables);
-//                 let rhs = operands.last().unwrap().eval(variables);
-//                 match *operator {
-//                     "+" => return lhs + rhs,
-//                     "-" => return lhs - rhs,
-//                     "*" => return lhs * rhs,
-//                     "/" => return lhs / rhs,
-//                     "^" => return lhs.powf(rhs),
-//                     "√" => return lhs.powf(1.0 / (rhs)),
-//                     op => panic!("Bad operator: {}", op),
-//                 }
-//             }
-//         }
-//     }
-// }
-//
+fn parse_expression<'a>(lexer: &mut Lexer<'a>, min_bp: f32) -> Expression<'a> {
+    let mut lhs = match lexer.next_token() {
+        Token::Identifier(id) => Expression::Operand(id),
+        Token::LeftParenthesis => {
+            let lhs = parse_expression(lexer, 0.0);
+            assert_eq!(lexer.next_token(), Token::RightParenthesis);
+            lhs
+        }
+        t => panic!("bad token: {:?}", t),
+    };
+    loop {
+        let op = match lexer.next_token() {
+            Token::Eof => break,
+            Token::RightParenthesis => break,
+            Token::Plus => "+",
+            Token::Minus => "-",
+            Token::Star => "*",
+            Token::Slash => "/",
+            Token::Assign => "=",
+            Token::Caret => "^",
+            t => panic!("bad token: {:?}", t),
+        };
+
+        let (l_bp, r_bp) = infix_binding_power(op);
+        if l_bp < min_bp {
+            break;
+        }
+
+        lexer.next_token();
+        let rhs = parse_expression(lexer, r_bp);
+        lhs = Expression::Operation(op, vec![lhs, rhs]);
+    }
+    lhs
+}
+
+fn infix_binding_power(operator: &str) -> (f32, f32) {
+    match operator {
+        "=" => (0.2, 0.1),
+        "+" | "-" => (1.0, 1.1),
+        "*" | "/" => (2.0, 2.1),
+        "^" | "√" => (3.1, 3.0),
+        "." => (4.0, 4.1),
+        _ => panic!("bad operator: {:?}", operator),
+    }
+}
+
+#[derive(Debug)]
+enum Expression<'a> {
+    Operand(&'a str),
+    Operation(&'a str, Vec<Expression<'a>>),
+}
+
+impl<'a> Expression<'a> {
+    fn from_input(input: &'a str) -> Expression<'a> {
+        let mut lexer = Lexer::new(&input);
+        parse_expression(&mut lexer, 0.0)
+    }
+
+    #[allow(unused)]
+    fn is_asign(&self) -> Option<(&'a str, &Expression<'a>)> {
+        match self {
+            Expression::Operand(_) => return None,
+            Expression::Operation(c, operands) => {
+                if *c == "=" {
+                    let var_name = match operands.first().unwrap() {
+                        Expression::Operand(c) => c,
+                        _ => unreachable!(),
+                    };
+                    return Some((var_name, operands.last().unwrap()));
+                }
+                return None;
+            }
+        }
+    }
+
+    #[allow(unused)]
+    fn eval(&self, variables_table: &HashMap<String, f32>) -> f32 {
+        match self {
+            Expression::Operand(c) => {
+                if let Ok(num) = c.parse::<f32>() {
+                    num
+                } else {
+                    *variables_table.get(*c).unwrap()
+                }
+            }
+            Expression::Operation(operator, operands) => {
+                let lhs = operands.first().unwrap().eval(variables_table);
+                let rhs = operands.last().unwrap().eval(variables_table);
+                match *operator {
+                    "+" => return lhs + rhs,
+                    "-" => return lhs - rhs,
+                    "*" => return lhs * rhs,
+                    "/" => return lhs / rhs,
+                    "^" => return lhs.powf(rhs),
+                    "√" => return lhs.powf(1.0 / (rhs)),
+                    op => panic!("Bad operator: {}", op),
+                }
+            }
+        }
+    }
+}
 
 #[allow(unused)]
 fn main() {
-    let mut variables: HashMap<String, f32> = HashMap::new();
+    let mut variables_table: HashMap<String, f32> = HashMap::new();
     loop {
         print!(">> ");
         io::stdout().flush().unwrap();
@@ -178,5 +187,13 @@ fn main() {
         if input.trim() == "exit" {
             break;
         }
+
+        let expression = Expression::from_input(input.trim());
+        if let Some((var, lhs)) = expression.is_asign() {
+            let value = lhs.eval(&variables_table);
+            variables_table.insert(var.to_string(), value);
+        }
+        let value = expression.eval(&variables_table);
+        println!("{}", value)
     }
 }
