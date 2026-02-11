@@ -29,12 +29,12 @@ pub fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Expression {
         let rhs = parse_expression(lexer, r_bp);
 
         lhs = match op {
-            Token::Plus => Expression::Operation("+".into(), vec![lhs, rhs]),
-            Token::Minus => Expression::Operation("-".into(), vec![lhs, rhs]),
-            Token::Star => Expression::Operation("*".into(), vec![lhs, rhs]),
-            Token::Slash => Expression::Operation("/".into(), vec![lhs, rhs]),
-            Token::Assign => Expression::Operation("=".into(), vec![lhs, rhs]),
-            Token::Caret => Expression::Operation("^".into(), vec![lhs, rhs]),
+            Token::Assign => Expression::Operation("=".into(), Box::new(lhs), Box::new(rhs)),
+            Token::Plus => Expression::Operation("+".into(), Box::new(lhs), Box::new(rhs)),
+            Token::Minus => Expression::Operation("-".into(), Box::new(lhs), Box::new(rhs)),
+            Token::Star => Expression::Operation("*".into(), Box::new(lhs), Box::new(rhs)),
+            Token::Slash => Expression::Operation("/".into(), Box::new(lhs), Box::new(rhs)),
+            Token::Caret => Expression::Operation("^".into(), Box::new(lhs), Box::new(rhs)),
             t => panic!("Unexpected token: {:?}", t),
         };
     }
@@ -55,21 +55,18 @@ fn infix_binding_power(operator: Token) -> (f32, f32) {
 pub enum Expression {
     Number(f32),
     Variable(String),
-    Operation(String, Vec<Expression>),
+    Operation(String, Box<Expression>, Box<Expression>),
 }
 
 impl Expression {
     pub fn is_asign(&self) -> Option<(String, &Expression)> {
         match self {
-            Expression::Operation(c, operands) => {
-                if c == "=" {
-                    let var_name = match operands.first().unwrap() {
-                        Expression::Variable(c) => c,
-                        _ => unreachable!(),
-                    };
-                    return Some((var_name.to_string(), operands.last().unwrap()));
+            Expression::Operation(operator, left, right) if operator == "=" => {
+                if let Expression::Variable(name) = &**left {
+                    Some((name.to_string(), right))
+                } else {
+                    None
                 }
-                return None;
             }
             _ => None,
         }
@@ -82,15 +79,16 @@ impl Expression {
             Expression::Variable(var) => *variables_table.get(var).unwrap_or_else(|| {
                 panic!("variable is undefined..");
             }),
-            Expression::Operation(operator, operands) => {
-                let lhs = operands.first().unwrap().eval(variables_table);
-                let rhs = operands.last().unwrap().eval(variables_table);
+            Expression::Operation(operator, lhs, rhs) => {
+                let lhs = lhs.eval(variables_table);
+                let rhs = rhs.eval(variables_table);
                 match operator.as_str() {
                     "+" => return lhs + rhs,
                     "-" => return lhs - rhs,
                     "*" => return lhs * rhs,
                     "/" => return lhs / rhs,
                     "^" => return lhs.powf(rhs),
+                    "=" =>  rhs,
                     op => panic!("Bad operator given: {}", op),
                 }
             }
