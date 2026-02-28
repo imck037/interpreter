@@ -1,6 +1,12 @@
 use crate::lexer::{Lexer, Token};
 use std::collections::HashMap;
 
+#[derive(Debug)]
+pub enum EvalError {
+    UndefinedVariable(String),
+    BadOperator(String),
+}
+
 pub fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Expression {
     let mut lhs = match lexer.next_token() {
         Token::Identifier(id) => Expression::Variable(id.to_string()),
@@ -72,24 +78,25 @@ impl Expression {
         }
     }
 
-    pub fn eval(&self, variables_table: &HashMap<String, f32>) -> f32 {
+    pub fn eval(&self, variables_table: &HashMap<String, f32>) -> Result<f32, EvalError> {
         match self {
-            Expression::Number(c) => *c,
+            Expression::Number(c) => Ok(*c),
 
-            Expression::Variable(var) => *variables_table.get(var).unwrap_or_else(|| {
-                panic!("variable is undefined..");
-            }),
+            Expression::Variable(var) => variables_table
+                .get(var)
+                .copied()
+                .ok_or_else(|| EvalError::UndefinedVariable(var.clone())),
             Expression::Operation(operator, lhs, rhs) => {
-                let lhs = lhs.eval(variables_table);
-                let rhs = rhs.eval(variables_table);
+                let lhs = lhs.eval(variables_table)?;
+                let rhs = rhs.eval(variables_table)?;
                 match operator.as_str() {
-                    "+" => return lhs + rhs,
-                    "-" => return lhs - rhs,
-                    "*" => return lhs * rhs,
-                    "/" => return lhs / rhs,
-                    "^" => return lhs.powf(rhs),
-                    "=" =>  rhs,
-                    op => panic!("Bad operator given: {}", op),
+                    "+" => return Ok(lhs + rhs),
+                    "-" => return Ok(lhs - rhs),
+                    "*" => return Ok(lhs * rhs),
+                    "/" => return Ok(lhs / rhs),
+                    "^" => return Ok(lhs.powf(rhs)),
+                    "=" => Ok(rhs),
+                    op => Err(EvalError::BadOperator(op.to_string())),
                 }
             }
         }

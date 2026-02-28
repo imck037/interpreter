@@ -26,9 +26,15 @@ fn main() {
         let expression = parse_expression(&mut lexer, 0.0);
         if let Some((var, lhs)) = expression.is_asign() {
             let value = lhs.eval(&variables_table);
-            variables_table.insert(var.to_string(), value);
+            variables_table.insert(var.to_string(), value.unwrap());
         }
-        let value = expression.eval(&variables_table);
-        println!("{}", value);
+        match expression.eval(&variables_table) {
+            Ok(value) => {
+                println!("{value}");
+            }
+            Err(e) => {
+                println!("{:?}", e);
+            }
+        }
     }
 }
