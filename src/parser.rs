@@ -1,22 +1,26 @@
 use crate::lexer::{Lexer, Token};
 use std::collections::HashMap;
 
-#[derive(Debug)]
-pub enum EvalError {
+#[derive(Debug, Clone)]
+pub enum EvalError<'a> {
     UndefinedVariable(String),
     BadOperator(String),
+    BadToken(Token<'a>),
 }
 
-pub fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Expression {
+pub fn parse_expression<'a>(
+    lexer: &mut Lexer,
+    min_bp: f32,
+) -> Result<Expression<'a>, EvalError<'a>> {
     let mut lhs = match lexer.next_token() {
-        Token::Identifier(id) => Expression::Variable(id.to_string()),
-        Token::Number(num) => Expression::Number(num.parse().unwrap()),
+        Token::Identifier(id) => Ok(Expression::Variable(id.to_string())),
+        Token::Number(num) => Ok(Expression::Number(num.parse().unwrap())),
         Token::LeftParenthesis => {
             let lhs = parse_expression(lexer, 0.0);
             assert_eq!(lexer.next_token(), Token::RightParenthesis);
             lhs
         }
-        t => panic!("bad token: {:?}", t),
+        t => Err(EvalError::BadToken(t)),
     };
     loop {
         let op = lexer.peek();
@@ -35,13 +39,37 @@ pub fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Expression {
         let rhs = parse_expression(lexer, r_bp);
 
         lhs = match op {
-            Token::Assign => Expression::Operation("=".into(), Box::new(lhs), Box::new(rhs)),
-            Token::Plus => Expression::Operation("+".into(), Box::new(lhs), Box::new(rhs)),
-            Token::Minus => Expression::Operation("-".into(), Box::new(lhs), Box::new(rhs)),
-            Token::Star => Expression::Operation("*".into(), Box::new(lhs), Box::new(rhs)),
-            Token::Slash => Expression::Operation("/".into(), Box::new(lhs), Box::new(rhs)),
-            Token::Caret => Expression::Operation("^".into(), Box::new(lhs), Box::new(rhs)),
-            t => panic!("Unexpected token: {:?}", t),
+            Token::Assign => Ok(Expression::Operation(
+                "=".into(),
+                Box::new(lhs),
+                Box::new(rhs),
+            )),
+            Token::Plus => Ok(Expression::Operation(
+                "+".into(),
+                Box::new(lhs),
+                Box::new(rhs),
+            )),
+            Token::Minus => Ok(Expression::Operation(
+                "-".into(),
+                Box::new(lhs),
+                Box::new(rhs),
+            )),
+            Token::Star => Ok(Expression::Operation(
+                "*".into(),
+                Box::new(lhs),
+                Box::new(rhs),
+            )),
+            Token::Slash => Ok(Expression::Operation(
+                "/".into(),
+                Box::new(lhs),
+                Box::new(rhs),
+            )),
+            Token::Caret => Ok(Expression::Operation(
+                "^".into(),
+                Box::new(lhs),
+                Box::new(rhs),
+            )),
+            t => Err(EvalError::BadToken(t)),
         };
     }
     lhs
@@ -57,19 +85,23 @@ fn infix_binding_power(operator: Token) -> (f32, f32) {
     }
 }
 
-#[derive(Debug)]
-pub enum Expression {
+#[derive(Debug, Clone)]
+pub enum Expression<'a> {
     Number(f32),
     Variable(String),
-    Operation(String, Box<Expression>, Box<Expression>),
+    Operation(
+        String,
+        Box<Result<Expression<'a>, EvalError<'a>>>,
+        Box<Result<Expression<'a>, EvalError<'a>>>,
+    ),
 }
 
-impl Expression {
+impl<'a> Expression<'a> {
     pub fn is_asign(&self) -> Option<(String, &Expression)> {
         match self {
             Expression::Operation(operator, left, right) if operator == "=" => {
-                if let Expression::Variable(name) = &**left {
-                    Some((name.to_string(), right))
+                if let Ok(Expression::Variable(name)) = &**left {
+                    Some((name.to_string(), &right.unwrap()))
                 } else {
                     None
                 }
@@ -87,8 +119,8 @@ impl Expression {
                 .copied()
                 .ok_or_else(|| EvalError::UndefinedVariable(var.clone())),
             Expression::Operation(operator, lhs, rhs) => {
-                let lhs = lhs.eval(variables_table)?;
-                let rhs = rhs.eval(variables_table)?;
+                let lhs = lhs.unwrap().eval(variables_table)?;
+                let rhs = rhs.unwrap().eval(variables_table)?;
                 match operator.as_str() {
                     "+" => return Ok(lhs + rhs),
                     "-" => return Ok(lhs - rhs),
