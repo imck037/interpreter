@@ -23,7 +23,14 @@ fn main() {
         }
 
         let mut lexer = Lexer::new(&input);
-        let expression = parse_expression(&mut lexer, 0.0);
+        let expression = match parse_expression(&mut lexer, 0.0) {
+            Ok(expr) => expr,
+            Err(e) => {
+                println!("{:?}", e);
+                continue;
+            }
+        };
+
         if let Some((var, lhs)) = expression.is_asign() {
             let value = lhs.eval(&variables_table);
             variables_table.insert(var.to_string(), value.unwrap());
