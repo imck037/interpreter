@@ -28,7 +28,7 @@ pub fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Result<Expression, Ev
             break;
         }
 
-        let (l_bp, r_bp) = infix_binding_power(op);
+        let (l_bp, r_bp) = infix_binding_power(op)?;
         if l_bp < min_bp {
             break;
         }
@@ -50,13 +50,13 @@ pub fn parse_expression(lexer: &mut Lexer, min_bp: f32) -> Result<Expression, Ev
     Ok(lhs)
 }
 
-fn infix_binding_power(operator: Token) -> (f32, f32) {
+fn infix_binding_power(operator: Token) -> Result<(f32, f32), EvalError> {
     match operator {
-        Token::Assign => (0.2, 0.1),
-        Token::Minus | Token::Plus => (1.0, 1.1),
-        Token::Star | Token::Slash => (2.0, 2.1),
-        Token::Caret => (3.1, 3.0),
-        _ => panic!("bad operator: {:?}", operator),
+        Token::Assign => Ok((0.2, 0.1)),
+        Token::Minus | Token::Plus => Ok((1.0, 1.1)),
+        Token::Star | Token::Slash => Ok((2.0, 2.1)),
+        Token::Caret => Ok((3.1, 3.0)),
+        _ => Err(EvalError::BadOperator("syntax is wrong".to_string())),
     }
 }
 
